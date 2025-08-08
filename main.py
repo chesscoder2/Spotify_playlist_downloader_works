@@ -106,6 +106,10 @@ class TermuxSpotifyDownloader:
             sys.exit(1)
             
         try:
+            # Handle urllib3/requests compatibility issue
+            import urllib3
+            urllib3.disable_warnings()
+            
             client_credentials_manager = SpotifyClientCredentials(
                 client_id=client_id,
                 client_secret=client_secret
