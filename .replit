@@ -1,2 +1,57 @@
+modules = ["python-3.11"]
 [agent]
 expertMode = true
+
+[nix]
+channel = "stable-25_05"
+packages = ["freetype", "lcms2", "libimagequant", "libjpeg", "libtiff", "libwebp", "libxcrypt", "openjpeg", "tcl", "tk", "zlib"]
+
+[workflows]
+runButton = "Project"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Spotify Downloader"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "install_and_run"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Final Termux Downloader"
+
+[[workflows.workflow]]
+name = "Spotify Downloader"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pip install spotipy yt-dlp mutagen pillow requests python-dotenv psutil tqdm colorama && cp attached_assets/__1754664485189.env .env && python attached_assets/s_1754664510980.py"
+
+[workflows.workflow.metadata]
+outputType = "console"
+
+[[workflows.workflow]]
+name = "install_and_run"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "chmod +x termux_setup.sh && pip install spotipy yt-dlp mutagen pillow requests python-dotenv psutil tqdm colorama && cp attached_assets/__1754664485189.env .env && python spotify_youtube_downloader.py"
+
+[[workflows.workflow]]
+name = "Final Termux Downloader"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "./run_termux.sh"
+
+[workflows.workflow.metadata]
+outputType = "console"
