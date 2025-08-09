@@ -211,7 +211,7 @@ def start_download():
     return redirect(url_for('download_status', download_id=download_id))
 
 @app.route('/status/<download_id>')
-def download_status_page(download_id):
+def download_status(download_id):
     return render_template('status.html', download_id=download_id)
 
 @app.route('/api/status/<download_id>')
