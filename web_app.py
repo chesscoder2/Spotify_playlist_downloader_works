@@ -26,7 +26,7 @@ app = Flask(__name__)
 app.secret_key = 'spotify_downloader_secret_key_2025'
 
 # Global storage for download status
-download_status = {}
+download_status_dict = {}
 
 class WebDownloader:
     def __init__(self):
@@ -71,7 +71,7 @@ class WebDownloader:
         """Download playlist with web progress tracking"""
         try:
             # Update status
-            download_status[download_id] = {
+            download_status_dict[download_id] = {
                 'status': 'initializing',
                 'progress': 0,
                 'current_song': '',
@@ -88,7 +88,7 @@ class WebDownloader:
             else:
                 raise ValueError("Invalid playlist URL")
                 
-            download_status[download_id]['status'] = 'fetching_playlist'
+            download_status_dict[download_id]['status'] = 'fetching_playlist'
             
             # Get playlist tracks
             playlist_data = self.downloader.spotify.playlist(playlist_id)
@@ -120,7 +120,7 @@ class WebDownloader:
             # Limit tracks
             tracks = tracks[:max_songs]
             
-            download_status[download_id].update({
+            download_status_dict[download_id].update({
                 'status': 'downloading',
                 'total': len(tracks),
                 'playlist_name': playlist_data.get('name', 'Unknown Playlist')
@@ -132,7 +132,7 @@ class WebDownloader:
             
             for i, track in enumerate(tracks):
                 try:
-                    download_status[download_id].update({
+                    download_status_dict[download_id].update({
                         'current_song': f"{track['name']} - {track['artist']}",
                         'progress': int((i / len(tracks)) * 100)
                     })
@@ -142,14 +142,14 @@ class WebDownloader:
                     filename = self.download_single_track(search_query, track, temp_dir)
                     if filename and os.path.exists(filename):
                         downloaded_files.append(filename)
-                        download_status[download_id]['downloaded'] = len(downloaded_files)
+                        download_status_dict[download_id]['downloaded'] = len(downloaded_files)
                         
                 except Exception as e:
                     print(f"Error downloading {track['name']}: {e}")
                     continue
             
             # Create zip file
-            download_status[download_id]['status'] = 'creating_zip'
+            download_status_dict[download_id]['status'] = 'creating_zip'
             
             zip_filename = f"spotify_playlist_{playlist_id}_{int(time.time())}.zip"
             zip_path = os.path.join(tempfile.gettempdir(), zip_filename)
@@ -164,7 +164,7 @@ class WebDownloader:
             # Clean up temp directory
             shutil.rmtree(temp_dir, ignore_errors=True)
             
-            download_status[download_id].update({
+            download_status_dict[download_id].update({
                 'status': 'completed',
                 'progress': 100,
                 'zip_file': zip_path,
@@ -172,7 +172,7 @@ class WebDownloader:
             })
             
         except Exception as e:
-            download_status[download_id] = {
+            download_status_dict[download_id] = {
                 'status': 'error',
                 'error': str(e),
                 'completed_at': datetime.now().isoformat()
@@ -216,7 +216,7 @@ def download_status(download_id):
 
 @app.route('/api/status/<download_id>')
 def get_download_status(download_id):
-    status = download_status.get(download_id, {
+    status = download_status_dict.get(download_id, {
         'status': 'not_found',
         'error': 'Download not found'
     })
@@ -224,7 +224,7 @@ def get_download_status(download_id):
 
 @app.route('/download/<download_id>')
 def download_file(download_id):
-    status = download_status.get(download_id, {})
+    status = download_status_dict.get(download_id, {})
     
     if status.get('status') != 'completed' or not status.get('zip_file'):
         flash('Download not ready or not found')
