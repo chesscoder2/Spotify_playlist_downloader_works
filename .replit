@@ -26,6 +26,10 @@ args = "install_and_run"
 task = "workflow.run"
 args = "Final Termux Downloader"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Web Downloader"
+
 [[workflows.workflow]]
 name = "Spotify Downloader"
 author = "agent"
@@ -55,3 +59,19 @@ args = "./run_termux.sh"
 
 [workflows.workflow.metadata]
 outputType = "console"
+
+[[workflows.workflow]]
+name = "Web Downloader"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python web_app.py"
+waitForPort = 5000
+
+[workflows.workflow.metadata]
+outputType = "webview"
+
+[[ports]]
+localPort = 5000
+externalPort = 80
