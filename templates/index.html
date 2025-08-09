@@ -163,6 +163,127 @@
         .example-links a:hover {
             text-decoration: underline;
         }
+        
+        .search-container {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        
+        .search-input {
+            flex: 1;
+            padding: 12px;
+            border: 1px solid #404040;
+            border-radius: 10px;
+            background: #2a2a2a;
+            color: white;
+            font-size: 1em;
+        }
+        
+        .search-input:focus {
+            outline: none;
+            border-color: #1DB954;
+            box-shadow: 0 0 0 2px rgba(29, 185, 84, 0.2);
+        }
+        
+        .search-btn {
+            background: linear-gradient(45deg, #1DB954, #1ed760);
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 0.9em;
+            font-weight: bold;
+            transition: transform 0.2s ease;
+        }
+        
+        .search-btn:hover {
+            transform: translateY(-1px);
+        }
+        
+        .divider {
+            text-align: center;
+            margin: 30px 0;
+            position: relative;
+        }
+        
+        .divider::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: #404040;
+        }
+        
+        .divider span {
+            background: rgba(25, 20, 20, 0.95);
+            padding: 0 15px;
+            color: #b3b3b3;
+            font-size: 0.9em;
+        }
+        
+        .search-results {
+            margin-top: 20px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .playlist-item {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+            padding: 15px;
+            margin: 10px 0;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        .playlist-item:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+        
+        .playlist-image {
+            width: 60px;
+            height: 60px;
+            border-radius: 8px;
+            object-fit: cover;
+            background: #404040;
+        }
+        
+        .playlist-info {
+            flex: 1;
+            text-align: left;
+        }
+        
+        .playlist-name {
+            color: white;
+            font-weight: bold;
+            margin-bottom: 5px;
+            font-size: 1em;
+        }
+        
+        .playlist-details {
+            color: #b3b3b3;
+            font-size: 0.8em;
+        }
+        
+        .search-loading {
+            text-align: center;
+            padding: 20px;
+            color: #b3b3b3;
+        }
+        
+        .search-empty {
+            text-align: center;
+            padding: 20px;
+            color: #b3b3b3;
+            font-style: italic;
+        }
     </style>
 </head>
 <body>
@@ -180,9 +301,33 @@
             {% endif %}
         {% endwith %}
         
+        <!-- Search Section -->
+        <div class="search-section" id="search-section">
+            <div class="form-group">
+                <label for="search_query">🔍 Search Public Playlists:</label>
+                <div class="search-container">
+                    <input 
+                        type="text" 
+                        id="search_query" 
+                        placeholder="e.g., pop hits, rock classics, workout music..."
+                        class="search-input"
+                    >
+                    <button type="button" onclick="searchPlaylists()" class="search-btn">
+                        Search
+                    </button>
+                </div>
+            </div>
+            
+            <div id="search-results" class="search-results"></div>
+        </div>
+
+        <div class="divider">
+            <span>OR</span>
+        </div>
+
         <form action="/start_download" method="POST">
             <div class="form-group">
-                <label for="playlist_url">Spotify Playlist URL:</label>
+                <label for="playlist_url">Enter Spotify Playlist URL Directly:</label>
                 <input 
                     type="url" 
                     id="playlist_url" 
@@ -250,6 +395,100 @@
                     alert('❌ Connection test failed: ' + error);
                 });
         }
+        
+        function searchPlaylists() {
+            const query = document.getElementById('search_query').value.trim();
+            if (!query) {
+                alert('Please enter a search term');
+                return;
+            }
+            
+            const resultsDiv = document.getElementById('search-results');
+            resultsDiv.innerHTML = '<div class="search-loading">🔍 Searching for playlists...</div>';
+            
+            fetch(`/search_playlists?q=${encodeURIComponent(query)}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'error') {
+                        resultsDiv.innerHTML = `<div class="search-empty">❌ ${data.message}</div>`;
+                        return;
+                    }
+                    
+                    if (data.playlists && data.playlists.length > 0) {
+                        let html = `<div style="color: #1DB954; font-weight: bold; margin-bottom: 15px;">
+                            Found ${data.count} accessible playlists:
+                        </div>`;
+                        
+                        data.playlists.forEach(playlist => {
+                            html += `
+                                <div class="playlist-item" onclick="selectPlaylist('${playlist.url}', '${playlist.name.replace(/'/g, "\\'")}')">
+                                    ${playlist.image ? 
+                                        `<img src="${playlist.image}" class="playlist-image" alt="Playlist cover">` :
+                                        `<div class="playlist-image" style="display: flex; align-items: center; justify-content: center; color: #666;">🎵</div>`
+                                    }
+                                    <div class="playlist-info">
+                                        <div class="playlist-name">${playlist.name}</div>
+                                        <div class="playlist-details">
+                                            ${playlist.tracks} songs • by ${playlist.owner}
+                                        </div>
+                                    </div>
+                                </div>
+                            `;
+                        });
+                        
+                        resultsDiv.innerHTML = html;
+                    } else {
+                        resultsDiv.innerHTML = '<div class="search-empty">No accessible public playlists found for this search term.</div>';
+                    }
+                })
+                .catch(error => {
+                    resultsDiv.innerHTML = `<div class="search-empty">❌ Search failed: ${error}</div>`;
+                });
+        }
+        
+        function selectPlaylist(url, name) {
+            document.getElementById('playlist_url').value = url;
+            
+            // Visual feedback
+            const playlistItems = document.querySelectorAll('.playlist-item');
+            playlistItems.forEach(item => {
+                item.style.background = 'rgba(255, 255, 255, 0.05)';
+            });
+            event.currentTarget.style.background = 'rgba(29, 185, 84, 0.2)';
+            
+            // Show confirmation
+            const notification = document.createElement('div');
+            notification.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: linear-gradient(45deg, #1DB954, #1ed760);
+                color: white;
+                padding: 15px 20px;
+                border-radius: 10px;
+                z-index: 1000;
+                font-weight: bold;
+                box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            `;
+            notification.textContent = `✅ Selected: ${name}`;
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                document.body.removeChild(notification);
+            }, 3000);
+            
+            // Scroll to download form
+            document.querySelector('form').scrollIntoView({ behavior: 'smooth' });
+        }
+        
+        // Allow Enter key to trigger search
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('search_query').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    searchPlaylists();
+                }
+            });
+        });
     </script>
 </body>
 </html>

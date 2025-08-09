@@ -183,6 +183,53 @@ def download_file(download_id):
     
     return send_file(zip_path, as_attachment=True, download_name=filename)
 
+@app.route('/search_playlists')
+def search_playlists():
+    query = request.args.get('q', '').strip()
+    if not query:
+        return jsonify({'status': 'error', 'message': 'Search query is required'})
+    
+    try:
+        # Search for playlists
+        results = web_downloader.downloader.spotify.search(q=query, type='playlist', limit=20)
+        
+        playlists = []
+        if results and 'playlists' in results and results['playlists']['items']:
+            for playlist in results['playlists']['items']:
+                if playlist and 'id' in playlist:
+                    try:
+                        # Test if we can access this playlist
+                        test_playlist = web_downloader.downloader.spotify.playlist(
+                            playlist['id'], 
+                            fields="name,tracks.total,owner.display_name,images"
+                        )
+                        
+                        if test_playlist['tracks']['total'] > 0:
+                            image_url = None
+                            if test_playlist.get('images') and len(test_playlist['images']) > 0:
+                                image_url = test_playlist['images'][0]['url']
+                            
+                            playlists.append({
+                                'id': playlist['id'],
+                                'name': test_playlist['name'],
+                                'tracks': test_playlist['tracks']['total'],
+                                'owner': test_playlist.get('owner', {}).get('display_name', 'Unknown'),
+                                'url': f"https://open.spotify.com/playlist/{playlist['id']}",
+                                'image': image_url
+                            })
+                            
+                    except Exception:
+                        continue  # Skip inaccessible playlists
+        
+        return jsonify({
+            'status': 'success',
+            'playlists': playlists,
+            'count': len(playlists)
+        })
+        
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': f'Search failed: {str(e)}'})
+
 @app.route('/test_connection')
 def test_connection():
     try:
