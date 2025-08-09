@@ -13,10 +13,12 @@ import time
 from datetime import datetime
 import json
 import shutil
+import re
 import sys
 sys.path.append('.')
 from main import TermuxSpotifyDownloader
 from dotenv import load_dotenv
+import yt_dlp
 
 load_dotenv()
 
@@ -29,6 +31,41 @@ download_status = {}
 class WebDownloader:
     def __init__(self):
         self.downloader = TermuxSpotifyDownloader()
+        
+    def download_single_track(self, search_query, track_info, output_dir):
+        """Download a single track using yt-dlp"""
+        try:
+            # Sanitize filename
+            safe_name = re.sub(r'[^\w\s-]', '', f"{track_info['artist']} - {track_info['name']}")
+            safe_name = re.sub(r'[-\s]+', '-', safe_name).strip('-')
+            
+            # yt-dlp options for high quality
+            ydl_opts = {
+                'format': 'bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/best',
+                'outtmpl': os.path.join(output_dir, f'{safe_name}.%(ext)s'),
+                'extractaudio': True,
+                'audioformat': 'mp3',
+                'audioquality': '320K',
+                'quiet': True,
+                'no_warnings': True,
+            }
+            
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                # Search and download
+                search_results = ydl.extract_info(f"ytsearch1:{search_query}", download=False)
+                if search_results and 'entries' in search_results and search_results['entries']:
+                    video_info = search_results['entries'][0]
+                    ydl.download([video_info['webpage_url']])
+                    
+                    # Find the downloaded file
+                    for file in os.listdir(output_dir):
+                        if safe_name in file and (file.endswith('.mp3') or file.endswith('.m4a')):
+                            return os.path.join(output_dir, file)
+                            
+        except Exception as e:
+            print(f"Error downloading {track_info['name']}: {e}")
+            
+        return None
         
     def download_playlist_web(self, playlist_url, max_songs=300, download_id=None):
         """Download playlist with web progress tracking"""
@@ -55,7 +92,27 @@ class WebDownloader:
             
             # Get playlist tracks
             playlist_data = self.downloader.spotify.playlist(playlist_id)
-            tracks = self.downloader.get_playlist_tracks(playlist_id)
+            tracks = []
+            
+            # Get tracks from playlist
+            results = playlist_data['tracks']
+            while results:
+                for item in results['items']:
+                    if item['track'] and item['track']['type'] == 'track':
+                        track = item['track']
+                        track_info = {
+                            'name': track['name'],
+                            'artist': ', '.join([artist['name'] for artist in track['artists']]),
+                            'album': track['album']['name'],
+                            'duration': track['duration_ms'],
+                            'spotify_url': track['external_urls']['spotify']
+                        }
+                        tracks.append(track_info)
+                        
+                if results['next']:
+                    results = self.downloader.spotify.next(results)
+                else:
+                    results = None
             
             if not tracks:
                 raise ValueError("No tracks found or playlist not accessible")
@@ -80,8 +137,9 @@ class WebDownloader:
                         'progress': int((i / len(tracks)) * 100)
                     })
                     
-                    # Download the track
-                    filename = self.downloader.download_track(track, temp_dir)
+                    # Download the track using YouTube search
+                    search_query = f"{track['artist']} {track['name']}"
+                    filename = self.download_single_track(search_query, track, temp_dir)
                     if filename and os.path.exists(filename):
                         downloaded_files.append(filename)
                         download_status[download_id]['downloaded'] = len(downloaded_files)
