@@ -15,6 +15,7 @@ import json
 import shutil
 import re
 import sys
+import random
 sys.path.append('.')
 from main import TermuxSpotifyDownloader
 from dotenv import load_dotenv
@@ -31,15 +32,23 @@ download_status_dict = {}
 class WebDownloader:
     def __init__(self):
         self.downloader = TermuxSpotifyDownloader()
+        self.user_agents = [
+            'com.google.android.youtube/19.09.37 (Linux; U; Android 11) gzip',
+            'com.google.android.youtube/19.08.35 (Linux; U; Android 12) gzip',
+            'com.google.ios.youtube/19.09.3 (iPhone14,3; U; CPU iOS 15_6 like Mac OS X)',
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'com.google.android.youtube.tv/2.12.08 (Linux; U; Android 9)',
+        ]
         
     def download_single_track(self, search_query, track_info, output_dir):
-        """Download a single track using yt-dlp"""
+        """Download a single track using yt-dlp with advanced bot detection bypass"""
         try:
             # Sanitize filename
             safe_name = re.sub(r'[^\w\s-]', '', f"{track_info['artist']} - {track_info['name']}")
             safe_name = re.sub(r'[-\s]+', '-', safe_name).strip('-')
             
-            # yt-dlp options for high quality with bot detection bypass
+            # Advanced yt-dlp options with stronger bot detection bypass
             ydl_opts = {
                 'format': 'bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/best',
                 'outtmpl': os.path.join(output_dir, f'{safe_name}.%(ext)s'),
@@ -48,34 +57,106 @@ class WebDownloader:
                 'audioquality': '320K',
                 'quiet': True,
                 'no_warnings': True,
-                # Bot detection bypass
+                'ignoreerrors': False,
+                
+                # Comprehensive bot detection bypass
                 'extractor_args': {
                     'youtube': {
-                        'player_client': ['android', 'web'],
-                        'player_skip': ['webpage', 'configs'],
+                        'player_client': ['android_music', 'android', 'ios', 'web', 'mweb'],
+                        'player_skip': ['webpage', 'configs', 'js'],
+                        'skip': ['hls', 'dash'],
+                        'po_token': None,
+                        'visitor_data': None,
                     }
                 },
-                # Additional headers to avoid detection
+                
+                # Multiple user agents rotation
                 'http_headers': {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+                    'User-Agent': 'com.google.android.youtube/19.09.37 (Linux; U; Android 11) gzip',
+                    'Accept': '*/*',
+                    'Accept-Language': 'en-US,en;q=0.9',
+                    'Accept-Encoding': 'gzip, deflate',
+                    'Origin': 'https://www.youtube.com',
+                    'Referer': 'https://www.youtube.com/',
+                    'X-YouTube-Client-Name': '3',
+                    'X-YouTube-Client-Version': '19.09.37',
                 },
-                # Retry settings
-                'retries': 3,
-                'fragment_retries': 3,
-                'ignoreerrors': False,
+                
+                # Enhanced retry and timeout settings
+                'retries': 5,
+                'fragment_retries': 5,
+                'file_access_retries': 3,
+                'extractor_retries': 3,
+                'socket_timeout': 30,
+                'sleep_interval': 1,
+                'max_sleep_interval': 5,
+                'sleep_interval_requests': 1,
+                
+                # Additional bypass options
+                'geo_bypass': True,
+                'geo_bypass_country': 'US',
+                'force_json': False,
+                'simulate': False,
+                'skip_download': False,
+                'prefer_insecure': False,
+                'proxy': None,
+                
+                # Disable problematic features
+                'youtube_include_dash_manifest': False,
+                'mark_watched': False,
+                'writesubtitles': False,
+                'writeautomaticsub': False,
             }
             
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                # Search and download
-                search_results = ydl.extract_info(f"ytsearch1:{search_query}", download=False)
-                if search_results and 'entries' in search_results and search_results['entries']:
-                    video_info = search_results['entries'][0]
-                    ydl.download([video_info['webpage_url']])
-                    
-                    # Find the downloaded file
-                    for file in os.listdir(output_dir):
-                        if safe_name in file and (file.endswith('.mp3') or file.endswith('.m4a')):
-                            return os.path.join(output_dir, file)
+            # Try multiple bypass strategies
+            bypass_strategies = [
+                # Strategy 1: Android Music client
+                {**ydl_opts, 'extractor_args': {'youtube': {
+                    'player_client': ['android_music'],
+                    'player_skip': ['webpage', 'configs', 'js']
+                }}},
+                # Strategy 2: iOS client
+                {**ydl_opts, 'extractor_args': {'youtube': {
+                    'player_client': ['ios'],
+                    'player_skip': ['webpage']
+                }}, 'http_headers': {
+                    'User-Agent': 'com.google.ios.youtube/19.09.3 (iPhone14,3; U; CPU iOS 15_6 like Mac OS X)',
+                    'X-YouTube-Client-Name': '5',
+                    'X-YouTube-Client-Version': '19.09.3',
+                }},
+                # Strategy 3: Web client with cookies
+                {**ydl_opts, 'extractor_args': {'youtube': {
+                    'player_client': ['web'],
+                    'player_skip': ['configs']
+                }}, 'cookiefile': None},
+                # Strategy 4: Android TV client
+                {**ydl_opts, 'extractor_args': {'youtube': {
+                    'player_client': ['android_embedded'],
+                }}, 'http_headers': {
+                    'User-Agent': 'com.google.android.youtube.tv/2.12.08 (Linux; U; Android 9)',
+                }},
+            ]
+            
+            for i, strategy in enumerate(bypass_strategies):
+                try:
+                    print(f"🔄 Trying bypass strategy {i+1}/4...")
+                    with yt_dlp.YoutubeDL(strategy) as ydl:
+                        # Search and download
+                        search_results = ydl.extract_info(f"ytsearch1:{search_query}", download=False)
+                        if search_results and 'entries' in search_results and search_results['entries']:
+                            video_info = search_results['entries'][0]
+                            ydl.download([video_info['webpage_url']])
+                            
+                            # Find the downloaded file
+                            for file in os.listdir(output_dir):
+                                if safe_name in file and (file.endswith('.mp3') or file.endswith('.m4a')):
+                                    print(f"✅ Success with strategy {i+1}")
+                                    return os.path.join(output_dir, file)
+                except Exception as e:
+                    print(f"⚠️ Strategy {i+1} failed: {str(e)[:100]}...")
+                    if i < len(bypass_strategies) - 1:
+                        time.sleep(2)  # Wait before trying next strategy
+                    continue
                             
         except Exception as e:
             print(f"Error downloading {track_info['name']}: {e}")
@@ -209,6 +290,12 @@ class WebDownloader:
                         'current_song': f"{track['name']} - {track['artist']}",
                         'progress': int((i / len(tracks)) * 100)
                     })
+                    
+                    # Add random delay between downloads to avoid rate limiting
+                    if i > 0:
+                        delay = random.uniform(1, 3)
+                        print(f"💤 Waiting {delay:.1f}s to avoid detection...")
+                        time.sleep(delay)
                     
                     # Download the track using YouTube search
                     search_query = f"{track['artist']} {track['name']}"
