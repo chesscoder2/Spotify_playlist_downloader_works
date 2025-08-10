@@ -7,7 +7,7 @@ channel = "stable-25_05"
 packages = ["freetype", "lcms2", "libimagequant", "libjpeg", "libtiff", "libwebp", "libxcrypt", "openjpeg", "tcl", "tk", "zlib"]
 
 [workflows]
-runButton = "Project"
+runButton = "Fixed Web Downloader"
 
 [[workflows.workflow]]
 name = "Project"
@@ -68,6 +68,19 @@ author = "agent"
 task = "shell.exec"
 args = "python web_app.py"
 waitForPort = 5000
+
+[[workflows.workflow]]
+name = "Fixed Web Downloader"
+author = 39974143
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pip install mutagen spotipy yt-dlp pillow requests python-dotenv psutil tqdm colorama flask"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python web_app.py"
 
 [[ports]]
 localPort = 5000

@@ -39,7 +39,7 @@ class WebDownloader:
             safe_name = re.sub(r'[^\w\s-]', '', f"{track_info['artist']} - {track_info['name']}")
             safe_name = re.sub(r'[-\s]+', '-', safe_name).strip('-')
             
-            # yt-dlp options for high quality
+            # yt-dlp options for high quality with bot detection bypass
             ydl_opts = {
                 'format': 'bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/best',
                 'outtmpl': os.path.join(output_dir, f'{safe_name}.%(ext)s'),
@@ -48,6 +48,21 @@ class WebDownloader:
                 'audioquality': '320K',
                 'quiet': True,
                 'no_warnings': True,
+                # Bot detection bypass
+                'extractor_args': {
+                    'youtube': {
+                        'player_client': ['android', 'web'],
+                        'player_skip': ['webpage', 'configs'],
+                    }
+                },
+                # Additional headers to avoid detection
+                'http_headers': {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+                },
+                # Retry settings
+                'retries': 3,
+                'fragment_retries': 3,
+                'ignoreerrors': False,
             }
             
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -66,6 +81,64 @@ class WebDownloader:
             print(f"Error downloading {track_info['name']}: {e}")
             
         return None
+    
+    def embed_track_metadata(self, audio_file, track_info):
+        """Embed metadata including album cover into audio file"""
+        try:
+            import mutagen
+            from mutagen.mp3 import MP3
+            from mutagen.id3 import ID3, APIC, TIT2, TPE1, TALB, TPE2, TRCK, TDRC, TCON
+            import requests
+            
+            # Load the audio file
+            audio = MP3(audio_file, ID3=ID3)
+            if audio.tags is None:
+                audio.add_tags()
+            
+            tags = audio.tags
+            tags.clear()
+            
+            # Add basic metadata
+            tags.add(TIT2(encoding=3, text=track_info['name']))
+            tags.add(TPE1(encoding=3, text=track_info['artist']))
+            tags.add(TALB(encoding=3, text=track_info['album']))
+            tags.add(TPE2(encoding=3, text=track_info['artist']))
+            
+            # Try to get album cover from Spotify
+            try:
+                # Get track details from Spotify to find album cover
+                search_results = self.downloader.spotify.search(
+                    q=f"track:{track_info['name']} artist:{track_info['artist']}", 
+                    type='track', 
+                    limit=1
+                )
+                
+                if search_results['tracks']['items']:
+                    spotify_track = search_results['tracks']['items'][0]
+                    if spotify_track['album']['images']:
+                        # Get highest resolution image
+                        album_cover_url = spotify_track['album']['images'][0]['url']
+                        
+                        # Download album cover
+                        response = requests.get(album_cover_url, timeout=10)
+                        if response.status_code == 200:
+                            tags.add(APIC(
+                                encoding=3,
+                                mime='image/jpeg',
+                                type=3,  # Cover (front)
+                                desc='Album Cover',
+                                data=response.content
+                            ))
+                            print(f"✅ Added album cover for {track_info['name']}")
+            except Exception as e:
+                print(f"⚠️ Could not add album cover: {e}")
+            
+            # Save the metadata
+            audio.save(v2_version=3)
+            print(f"✅ Metadata embedded for {track_info['name']}")
+            
+        except Exception as e:
+            print(f"❌ Error embedding metadata: {e}")
         
     def download_playlist_web(self, playlist_url, max_songs=300, download_id=None):
         """Download playlist with web progress tracking"""
@@ -141,6 +214,8 @@ class WebDownloader:
                     search_query = f"{track['artist']} {track['name']}"
                     filename = self.download_single_track(search_query, track, temp_dir)
                     if filename and os.path.exists(filename):
+                        # Embed metadata and album cover
+                        self.embed_track_metadata(filename, track)
                         downloaded_files.append(filename)
                         download_status_dict[download_id]['downloaded'] = len(downloaded_files)
                         

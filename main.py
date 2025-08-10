@@ -209,6 +209,19 @@ class TermuxSpotifyDownloader:
             'audio_format': 'best',
             'extract_flat': False,
             
+            # Bot detection bypass
+            'extractor_args': {
+                'youtube': {
+                    'player_client': ['android', 'web'],
+                    'player_skip': ['webpage', 'configs'],
+                }
+            },
+            
+            # Additional headers to avoid detection
+            'http_headers': {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            },
+            
             # Performance settings
             'concurrent_fragment_downloads': 1 if self.is_termux else 4,
             'retries': 3,
